@@ -1,0 +1,37 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User's profile and tracking data",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "channels": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "description": { "type": "string" },
+              "createdAt": { "type": "string" }
+            }
+          }
+        },
+        "records": {
+          "type": "object",
+          "description": "Map of date strings to DailyRecord objects"
+        }
+      },
+      "required": ["uid", "name", "email", "channels", "records"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "User data including channels and daily records"
+    }
+  }
+}
