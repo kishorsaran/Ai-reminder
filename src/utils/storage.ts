@@ -4,7 +4,8 @@ const STORAGE_KEY = 'channel_tracker_data';
 
 const defaultData: AppData = {
   channels: [],
-  records: {},
+  boards: [],
+  notes: [],
 };
 
 export const loadData = (): AppData => {

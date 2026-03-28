@@ -1,6 +1,6 @@
-import { doc, setDoc, onSnapshot } from 'firebase/firestore';
-import { db, auth } from '../firebase';
-import { AppData } from '../types';
+import { doc, setDoc, onSnapshot, collection, deleteDoc, getDoc, updateDoc } from 'firebase/firestore';
+import { db } from '../firebase';
+import { AppData, Channel, Board, Note } from '../types';
 
 export enum OperationType {
   CREATE = 'create',
@@ -34,17 +34,12 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData.map(provider => ({
-        providerId: provider.providerId,
-        displayName: provider.displayName,
-        email: provider.email,
-        photoUrl: provider.photoURL
-      })) || []
+      userId: 'focus-user-001',
+      email: null,
+      emailVerified: undefined,
+      isAnonymous: undefined,
+      tenantId: null,
+      providerInfo: []
     },
     operationType,
     path
@@ -55,43 +50,99 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 
 export const defaultData: AppData = {
   channels: [],
-  records: {},
+  boards: [],
+  notes: [],
 };
 
-export const syncDataToFirestore = async (userId: string, data: AppData) => {
-  const path = `users/${userId}`;
+// Subscriptions
+export const subscribeToChannels = (userId: string, onData: (channels: Channel[]) => void) => {
+  const path = `users/${userId}/channels`;
+  return onSnapshot(
+    collection(db, path),
+    (snapshot) => {
+      const channels = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Channel));
+      channels.sort((a, b) => (a.order || 0) - (b.order || 0));
+      onData(channels);
+    },
+    (error) => handleFirestoreError(error, OperationType.LIST, path)
+  );
+};
+
+export const subscribeToBoards = (userId: string, onData: (boards: Board[]) => void) => {
+  const path = `users/${userId}/boards`;
+  return onSnapshot(
+    collection(db, path),
+    (snapshot) => {
+      const boards = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Board));
+      onData(boards);
+    },
+    (error) => handleFirestoreError(error, OperationType.LIST, path)
+  );
+};
+
+export const subscribeToNotes = (userId: string, onData: (notes: Note[]) => void) => {
+  const path = `users/${userId}/notes`;
+  return onSnapshot(
+    collection(db, path),
+    (snapshot) => {
+      const notes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Note));
+      onData(notes);
+    },
+    (error) => handleFirestoreError(error, OperationType.LIST, path)
+  );
+};
+
+// Mutations
+export const saveChannel = async (userId: string, channel: Channel) => {
+  const path = `users/${userId}/channels/${channel.id}`;
   try {
-    await setDoc(doc(db, 'users', userId), {
-      uid: userId,
-      name: auth.currentUser?.displayName || 'User',
-      email: auth.currentUser?.email || 'no-email@example.com',
-      channels: data.channels,
-      records: data.records,
-    }, { merge: true });
+    await setDoc(doc(db, 'users', userId, 'channels', channel.id), channel);
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
   }
 };
 
-export const subscribeToUserData = (userId: string, onData: (data: AppData) => void) => {
-  const path = `users/${userId}`;
-  return onSnapshot(
-    doc(db, 'users', userId),
-    (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        onData({
-          channels: data.channels || [],
-          records: data.records || {},
-        });
-      } else {
-        // Initialize if not exists
-        syncDataToFirestore(userId, defaultData);
-        onData(defaultData);
-      }
-    },
-    (error) => {
-      handleFirestoreError(error, OperationType.GET, path);
-    }
-  );
+export const deleteChannel = async (userId: string, channelId: string) => {
+  const path = `users/${userId}/channels/${channelId}`;
+  try {
+    await deleteDoc(doc(db, 'users', userId, 'channels', channelId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+};
+
+export const saveBoard = async (userId: string, board: Board) => {
+  const path = `users/${userId}/boards/${board.id}`;
+  try {
+    await setDoc(doc(db, 'users', userId, 'boards', board.id), board);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+};
+
+export const deleteBoard = async (userId: string, boardId: string) => {
+  const path = `users/${userId}/boards/${boardId}`;
+  try {
+    await deleteDoc(doc(db, 'users', userId, 'boards', boardId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+};
+
+export const saveNote = async (userId: string, note: Note) => {
+  const path = `users/${userId}/notes/${note.id}`;
+  try {
+    await setDoc(doc(db, 'users', userId, 'notes', note.id), note);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+};
+
+export const deleteNote = async (userId: string, noteId: string) => {
+  const path = `users/${userId}/notes/${noteId}`;
+  try {
+    await deleteDoc(doc(db, 'users', userId, 'notes', noteId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
 };

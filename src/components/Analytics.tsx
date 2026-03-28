@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { AppData } from '../types';
-import { getTodayString } from '../utils/storage';
+import { getTodayString, formatDate } from '../utils/storage';
 import { motion } from 'motion/react';
 import { GoogleGenAI } from '@google/genai';
 
@@ -13,30 +13,23 @@ export default function Analytics({ data }: AnalyticsProps) {
     let totalUploads = 0;
     let currentStreak = 0;
     
-    const today = new Date();
-    const records = Object.values(data.records).sort((a, b) => a.date.localeCompare(b.date));
-    
-    // Calculate total uploads
-    records.forEach(record => {
-      const uploadsOnDay = Object.values(record.uploads).filter(Boolean).length;
-      totalUploads += uploadsOnDay;
-    });
-
-    // Calculate streak (days with at least one upload)
-    let tempStreak = 0;
     const todayStr = getTodayString();
     
     // Create a set of dates with at least one upload
-    const activeDates = new Set(
-      records
-        .filter(r => Object.values(r.uploads).some(Boolean))
-        .map(r => r.date)
-    );
+    const activeDates = new Set<string>();
+    
+    data.channels.forEach(channel => {
+      if (channel.history) {
+        totalUploads += channel.history.length;
+        channel.history.forEach(date => activeDates.add(date));
+      }
+    });
 
     // Check backwards from today for streak
+    let tempStreak = 0;
     let checkDate = new Date();
     while (true) {
-      const dateStr = checkDate.toISOString().split('T')[0];
+      const dateStr = formatDate(checkDate); // YYYY-MM-DD
       if (activeDates.has(dateStr)) {
         tempStreak++;
         checkDate.setDate(checkDate.getDate() - 1);
@@ -53,10 +46,9 @@ export default function Analytics({ data }: AnalyticsProps) {
     const last7Days = Array.from({ length: 7 }).map((_, i) => {
       const d = new Date();
       d.setDate(d.getDate() - (6 - i));
-      const dateStr = d.toISOString().split('T')[0];
+      const dateStr = formatDate(d);
       const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
-      const record = data.records[dateStr];
-      const hasUpload = record ? Object.values(record.uploads).some(Boolean) : false;
+      const hasUpload = activeDates.has(dateStr);
       return { dateStr, dayName, hasUpload, date: d };
     });
 
@@ -155,7 +147,7 @@ export default function Analytics({ data }: AnalyticsProps) {
           whileTap={{ scale: 1.02 }}
           className="glass-panel glass-panel-interactive p-5 rounded-3xl flex flex-col justify-center relative overflow-hidden cursor-pointer"
         >
-          <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/10 rounded-full blur-2xl -mr-10 -mt-10"></div>
+          <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl -mr-10 -mt-10"></div>
           <p className="text-xs font-medium text-secondary mb-2 uppercase tracking-wider">Total Uploads</p>
           <p className="text-4xl heading-primary">{stats.totalUploads}</p>
         </motion.div>
@@ -187,7 +179,7 @@ export default function Analytics({ data }: AnalyticsProps) {
                     initial={{ height: 0, opacity: 0 }}
                     animate={{ height: day.hasUpload ? '100%' : '20%', opacity: day.hasUpload ? 1 : 0.3 }}
                     transition={{ duration: 0.5, delay: i * 0.05, ease: "easeOut" }}
-                    className={`w-full rounded-full ${day.hasUpload ? 'bg-gradient-to-t from-green-500/80 to-green-400/80 shadow-[0_0_10px_rgba(74,222,128,0.3)]' : 'bg-white/20'}`}
+                    className={`w-full rounded-full ${day.hasUpload ? 'bg-gradient-to-t from-[#3b82f6] to-[#06b6d4] shadow-[0_0_10px_rgba(59,130,246,0.3)]' : 'bg-white/20'}`}
                   />
                 </div>
                 <span className="text-[10px] text-secondary font-medium uppercase tracking-wider">{day.dayName.charAt(0)}</span>
@@ -202,14 +194,14 @@ export default function Analytics({ data }: AnalyticsProps) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.15, ease: "easeOut" }}
           whileTap={{ scale: 1.02 }}
-          className="glass-panel p-5 rounded-3xl relative overflow-hidden border border-purple-500/10 shadow-[0_0_15px_rgba(168,85,247,0.05)] cursor-pointer flex items-start gap-4"
+          className="glass-panel p-5 rounded-3xl relative overflow-hidden border border-[#3b82f6]/10 shadow-[0_0_15px_rgba(59,130,246,0.05)] cursor-pointer flex items-start gap-4"
         >
-          <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center shrink-0">
-            <span className="text-purple-300 text-sm">✨</span>
+          <div className="w-8 h-8 rounded-full bg-[#3b82f6]/20 flex items-center justify-center shrink-0">
+            <span className="text-[#3b82f6] text-sm">✨</span>
           </div>
           <div>
-            <h3 className="text-xs font-medium text-purple-300/80 mb-1 uppercase tracking-wider">Insight</h3>
-            <p className="text-[13px] sm:text-[14px] text-white/90 leading-relaxed font-normal">
+            <h3 className="text-xs font-medium text-[#3b82f6]/80 mb-1 uppercase tracking-wider">Insight</h3>
+            <p className="text-[13px] sm:text-[14px] text-[#e2e8f0] leading-relaxed font-normal">
               {aiInsight}
             </p>
           </div>
@@ -232,7 +224,7 @@ export default function Analytics({ data }: AnalyticsProps) {
               initial={{ width: 0 }}
               animate={{ width: `${stats.goalProgress}%` }}
               transition={{ duration: 0.8, ease: "easeOut" }}
-              className="h-full bg-gradient-to-r from-purple-400 to-pink-400 rounded-full shadow-[0_0_10px_rgba(192,132,252,0.5)]"
+              className="h-full bg-gradient-to-r from-[#3b82f6] to-[#06b6d4] rounded-full shadow-[0_0_10px_rgba(59,130,246,0.5)]"
             />
           </div>
         </motion.div>

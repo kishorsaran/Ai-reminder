@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AppData, Channel } from '../types';
-import { getTodayString } from '../utils/storage';
 import { motion, AnimatePresence } from 'motion/react';
+import { saveChannel } from '../utils/firestore';
+import { getTodayString } from '../utils/storage';
 
 interface HomeProps {
   data: AppData;
+  userId: string;
   updateData: (newData: AppData) => void;
 }
 
-function ChannelCard({ channel, isUploaded, toggleUpload, index }: { channel: Channel, isUploaded: boolean, toggleUpload: (id: string) => void, index: number }) {
+function ChannelCard({ channel, isUploaded, toggleUpload, index }: { channel: Channel, isUploaded: boolean, toggleUpload: (channel: Channel) => void, index: number }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const glowTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -49,7 +51,7 @@ function ChannelCard({ channel, isUploaded, toggleUpload, index }: { channel: Ch
       e.stopPropagation();
       return;
     }
-    toggleUpload(channel.id);
+    toggleUpload(channel);
   };
 
   useEffect(() => {
@@ -92,11 +94,11 @@ function ChannelCard({ channel, isUploaded, toggleUpload, index }: { channel: Ch
     >
       {/* Left accent line */}
       <div className={`absolute left-0 top-0 bottom-0 w-1 transition-colors duration-300 ${
-        isUploaded ? 'bg-green-400' : 'bg-red-400/50'
+        isUploaded ? 'bg-[#22c55e]' : 'bg-[#ef4444]/60'
       }`} />
       
       <div className="pl-3 flex-1">
-        <motion.h3 layout="position" className="text-lg font-medium tracking-[0.2px]">{channel.name}</motion.h3>
+        <motion.h3 layout="position" className="text-lg font-medium tracking-[0.2px] text-[#e2e8f0]">{channel.name}</motion.h3>
         
         <AnimatePresence>
           {isExpanded && channel.description && (
@@ -107,7 +109,7 @@ function ChannelCard({ channel, isUploaded, toggleUpload, index }: { channel: Ch
               transition={{ duration: 0.2, ease: "easeOut" }}
               className="overflow-hidden"
             >
-              <p className="text-[12px] sm:text-[13px] font-normal text-white/75 leading-[1.4] mt-1 mb-1">
+              <p className="text-[12px] sm:text-[13px] font-normal text-[#94a3b8] leading-[1.4] mt-1 mb-1">
                 {channel.description}
               </p>
             </motion.div>
@@ -115,37 +117,50 @@ function ChannelCard({ channel, isUploaded, toggleUpload, index }: { channel: Ch
         </AnimatePresence>
 
         <motion.p layout="position" className={`text-[11px] mt-1 transition-colors duration-300 ${
-          isUploaded ? 'text-green-300/80' : 'text-white/70'
+          isUploaded ? 'text-[#22c55e]' : 'text-[#ef4444]/60'
         }`}>
           {isUploaded ? 'Uploaded' : 'Not Uploaded'}
         </motion.p>
       </div>
       
-      <button
-        onClick={(e) => { e.stopPropagation(); toggleUpload(channel.id); }}
-        className={`relative inline-flex h-7 w-12 items-center rounded-full focus:outline-none shadow-inner ml-4 shrink-0 ${
-          isUploaded 
-            ? 'bg-green-500/40 border border-green-400/50 shadow-[0_0_15px_rgba(74,222,128,0.2)]' 
-            : 'bg-white/10 border border-white/10'
-        }`}
-        style={{ transition: 'all 300ms ease-out' }}
+      <motion.button
+        onClick={(e) => { e.stopPropagation(); toggleUpload(channel); }}
+        whileTap={{ scale: 0.96 }}
+        className={`relative inline-flex h-7 w-12 items-center rounded-full focus:outline-none ml-4 shrink-0 border border-white/10`}
+        style={{ 
+          background: isUploaded 
+            ? 'linear-gradient(135deg, #22c55e, #3b82f6)' 
+            : 'rgba(255,255,255,0.1)',
+          boxShadow: activeGlow && isUploaded
+            ? '0 0 15px rgba(34,197,94,0.4), inset 0 1px 2px rgba(0,0,0,0.2)' 
+            : 'inset 0 1px 2px rgba(0,0,0,0.2)',
+          transition: 'background 300ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 300ms cubic-bezier(0.4, 0, 0.2, 1)'
+        }}
       >
-        <span
-          className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md ${
-            isUploaded ? 'translate-x-6 shadow-[0_0_10px_rgba(255,255,255,0.8)]' : 'translate-x-1 opacity-70'
-          }`}
-          style={{ transition: isUploaded ? 'transform 400ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 300ms ease-out' : 'transform 300ms ease-out, opacity 300ms ease-out' }}
+        <motion.span
+          initial={false}
+          animate={{
+            x: isUploaded ? 22 : 2,
+          }}
+          transition={{
+            type: "spring",
+            stiffness: 500,
+            damping: 30,
+            mass: 1
+          }}
+          className="inline-block h-6 w-6 rounded-full bg-white"
+          style={{
+            boxShadow: '0 2px 6px rgba(0,0,0,0.3)'
+          }}
         />
-      </button>
+      </motion.button>
     </motion.div>
   );
 }
 
-export default function Home({ data, updateData }: HomeProps) {
+export default function Home({ data, userId, updateData }: HomeProps) {
   const [timeLeft, setTimeLeft] = useState('');
   const [secondsLeft, setSecondsLeft] = useState('');
-  const today = getTodayString();
-  const todayRecord = data.records[today] || { date: today, uploads: {} };
 
   useEffect(() => {
     const calculateTimeLeft = () => {
@@ -167,23 +182,42 @@ export default function Home({ data, updateData }: HomeProps) {
     return () => clearInterval(timer);
   }, []);
 
-  const toggleUpload = (channelId: string) => {
-    const isUploaded = todayRecord.uploads[channelId] || false;
-    const newRecord = {
-      ...todayRecord,
-      uploads: {
-        ...todayRecord.uploads,
-        [channelId]: !isUploaded,
-      },
+  const toggleUpload = async (channel: Channel) => {
+    const now = new Date();
+    const todayStr = getTodayString();
+    
+    const isNowUploaded = !channel.uploaded;
+    let newHistory = channel.history || [];
+    
+    if (isNowUploaded) {
+      if (!newHistory.includes(todayStr)) {
+        newHistory = [...newHistory, todayStr];
+      }
+    } else {
+      newHistory = newHistory.filter(date => date !== todayStr);
+    }
+
+    const updatedChannel = {
+      ...channel,
+      uploaded: isNowUploaded,
+      lastUpdated: now.getTime(),
+      history: newHistory,
     };
 
+    // Optimistic UI update
+    const previousData = { ...data };
     updateData({
       ...data,
-      records: {
-        ...data.records,
-        [today]: newRecord,
-      },
+      channels: data.channels.map(c => c.id === channel.id ? updatedChannel : c)
     });
+
+    try {
+      await saveChannel(userId, updatedChannel);
+    } catch (error) {
+      console.error("Failed to update channel:", error);
+      // Revert UI on failure
+      updateData(previousData);
+    }
   };
 
   const currentDate = new Date();
@@ -197,13 +231,13 @@ export default function Home({ data, updateData }: HomeProps) {
         <div className="flex items-baseline space-x-2 mb-1">
           <h1 className="text-6xl heading-primary text-gradient leading-none">{dayNumber}</h1>
           <div className="flex flex-col">
-            <span className="text-lg font-medium tracking-wider text-white/80">{monthName}</span>
+            <span className="text-lg font-medium tracking-wider text-primary">{monthName}</span>
             <span className="text-sm text-secondary">{dayName}</span>
           </div>
         </div>
         
-        <div className="mt-3 inline-flex items-center px-3 py-1.5 rounded-full bg-white/[0.06] backdrop-blur-[12px] border border-white/[0.08] text-xs font-medium text-white/60 shadow-inner">
-          <span className="w-1.5 h-1.5 rounded-full bg-white/80 mr-2 animate-pulse-slow"></span>
+        <div className="mt-3 inline-flex items-center px-3 py-1.5 rounded-full bg-white/[0.06] backdrop-blur-[12px] border border-white/[0.08] text-xs font-medium text-[#94a3b8] shadow-inner">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#3b82f6] mr-2 animate-pulse-slow"></span>
           Resets in {timeLeft} <span className="w-4 inline-block text-right ml-0.5 opacity-70">{secondsLeft}</span>
         </div>
       </div>
@@ -216,12 +250,11 @@ export default function Home({ data, updateData }: HomeProps) {
           </div>
         ) : (
           data.channels.map((channel, index) => {
-            const isUploaded = todayRecord.uploads[channel.id] || false;
             return (
               <ChannelCard 
                 key={channel.id} 
                 channel={channel} 
-                isUploaded={isUploaded} 
+                isUploaded={channel.uploaded} 
                 toggleUpload={toggleUpload}
                 index={index}
               />

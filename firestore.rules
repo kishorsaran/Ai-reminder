@@ -5,56 +5,98 @@ service cloud.firestore {
     // Assumed Data Model
     // ===============================================================
     //
-    // Collection: users
-    // Document ID: {userId}
+    // Collection: users/{userId}/channels
+    // Document ID: {channelId}
     // Fields:
-    //   - uid: string (required, immutable) - User's Firebase UID
-    //   - name: string (required) - User's display name
-    //   - email: string (required) - User's email address
-    //   - channels: list (required) - Array of channel objects
-    //   - records: map (required) - Map of daily records
+    //   - id: string
+    //   - name: string
+    //   - description: string (optional)
+    //   - uploaded: boolean
+    //   - lastUpdated: number
+    //   - order: number
+    //   - history: list (optional)
+    //
+    // Collection: users/{userId}/boards
+    // Document ID: {boardId}
+    // Fields:
+    //   - id: string
+    //   - name: string
+    //   - createdAt: number
+    //
+    // Collection: users/{userId}/notes
+    // Document ID: {noteId}
+    // Fields:
+    //   - id: string
+    //   - boardId: string
+    //   - content: string
+    //   - color: string
+    //   - x: number
+    //   - y: number
+    //   - updatedAt: number
     //
     // ===============================================================
     // Helper Functions
     // ===============================================================
-    function isAuthenticated() {
-      return request.auth != null;
-    }
-    
     function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
-    }
-    
-    function uidUnchanged() {
-      return !('uid' in request.resource.data) || request.resource.data.uid == request.auth.uid;
-    }
-    
-    function uidNotModified() {
-      return !('uid' in request.resource.data) || request.resource.data.uid == resource.data.uid;
+      return userId == 'focus-user-001';
     }
     
     function hasRequiredFields(fields) {
       return request.resource.data.keys().hasAll(fields);
     }
-    
-    function isValidEmail(email) {
-      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
-    }
-    
-    function isValidUser(data) {
-      return hasRequiredFields(['uid', 'name', 'email', 'channels', 'records']) &&
-             data.uid is string && data.uid.size() > 0 && data.uid.size() < 100 &&
+
+    function isValidChannel(data) {
+      return hasRequiredFields(['id', 'name', 'uploaded', 'lastUpdated', 'order']) &&
+             data.id is string && data.id.size() > 0 && data.id.size() < 100 &&
              data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
-             data.email is string && isValidEmail(data.email) &&
-             data.channels is list && data.channels.size() < 1000 &&
-             data.records is map;
+             data.uploaded is bool &&
+             data.lastUpdated is number &&
+             data.order is number &&
+             (!('description' in data) || (data.description is string && data.description.size() < 500)) &&
+             (!('history' in data) || (data.history is list && data.history.size() < 10000));
+    }
+
+    function isValidBoard(data) {
+      return hasRequiredFields(['id', 'name', 'createdAt']) &&
+             data.id is string && data.id.size() > 0 && data.id.size() < 100 &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.createdAt is number;
+    }
+
+    function isValidNote(data) {
+      return hasRequiredFields(['id', 'boardId', 'content', 'color', 'x', 'y', 'updatedAt']) &&
+             data.id is string && data.id.size() > 0 && data.id.size() < 100 &&
+             data.boardId is string && data.boardId.size() > 0 && data.boardId.size() < 100 &&
+             data.content is string && data.content.size() < 10000 &&
+             data.color is string && data.color.size() < 50 &&
+             data.x is number &&
+             data.y is number &&
+             data.updatedAt is number;
     }
 
     match /users/{userId} {
-      allow read: if isOwner(userId);
-      allow create: if isOwner(userId) && isValidUser(request.resource.data) && uidUnchanged();
-      allow update: if isOwner(userId) && isValidUser(request.resource.data) && uidNotModified();
-      allow delete: if isOwner(userId);
+      allow read, write: if isOwner(userId);
+      
+      match /channels/{channelId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidChannel(request.resource.data);
+        allow update: if isOwner(userId) && isValidChannel(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      match /boards/{boardId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidBoard(request.resource.data);
+        allow update: if isOwner(userId) && isValidBoard(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      match /notes/{noteId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidNote(request.resource.data);
+        allow update: if isOwner(userId) && isValidNote(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
     }
   }
 }

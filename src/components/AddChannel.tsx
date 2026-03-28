@@ -1,16 +1,18 @@
 import React, { useState } from 'react';
 import { AppData, Channel } from '../types';
 import { Reorder } from 'motion/react';
-import { GripVertical, ArrowUp, ArrowDown, Trash2 } from 'lucide-react';
+import { GripVertical, ArrowUp, ArrowDown, Trash2, AlertCircle } from 'lucide-react';
+import { saveChannel, deleteChannel } from '../utils/firestore';
 
 interface AddChannelProps {
   data: AppData;
-  updateData: (newData: AppData) => void;
+  userId: string;
 }
 
-export default function AddChannel({ data, updateData }: AddChannelProps) {
+export default function AddChannel({ data, userId }: AddChannelProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [channelToDelete, setChannelToDelete] = useState<string | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,29 +23,38 @@ export default function AddChannel({ data, updateData }: AddChannelProps) {
       id: Date.now().toString(),
       name: name.trim(),
       description: description.trim(),
-      createdAt: new Date().toISOString(),
+      uploaded: false,
+      lastUpdated: new Date().getTime(),
+      order: data.channels.length,
     };
 
-    updateData({
-      ...data,
-      channels: [...data.channels, newChannel],
-    });
+    saveChannel(userId, newChannel);
 
     setName('');
     setDescription('');
   };
 
   const handleDelete = (id: string) => {
-    updateData({
-      ...data,
-      channels: data.channels.filter(c => c.id !== id),
-    });
+    setChannelToDelete(id);
+  };
+
+  const confirmDelete = () => {
+    if (channelToDelete) {
+      deleteChannel(userId, channelToDelete);
+      setChannelToDelete(null);
+    }
+  };
+
+  const cancelDelete = () => {
+    setChannelToDelete(null);
   };
 
   const handleReorder = (newChannels: Channel[]) => {
-    updateData({
-      ...data,
-      channels: newChannels,
+    // Optimistically update order
+    newChannels.forEach((channel, index) => {
+      if (channel.order !== index) {
+        saveChannel(userId, { ...channel, order: index });
+      }
     });
   };
 
@@ -60,10 +71,7 @@ export default function AddChannel({ data, updateData }: AddChannelProps) {
     newChannels[index] = newChannels[targetIndex];
     newChannels[targetIndex] = temp;
 
-    updateData({
-      ...data,
-      channels: newChannels,
-    });
+    handleReorder(newChannels);
   };
 
   return (
@@ -172,6 +180,34 @@ export default function AddChannel({ data, updateData }: AddChannelProps) {
               </Reorder.Item>
             ))}
           </Reorder.Group>
+        </div>
+      )}
+
+      {channelToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-[#1a1a1a] border border-white/10 rounded-3xl p-6 max-w-sm w-full shadow-2xl">
+            <div className="flex items-center gap-3 text-red-400 mb-4">
+              <AlertCircle size={24} />
+              <h3 className="text-lg font-semibold text-white">Delete Channel</h3>
+            </div>
+            <p className="text-white/70 text-sm mb-6 leading-relaxed">
+              Are you sure you want to delete this channel? All associated history will be lost. This action cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={cancelDelete}
+                className="flex-1 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white font-medium transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="flex-1 py-3 rounded-xl bg-red-500 hover:bg-red-400 text-white font-semibold transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
