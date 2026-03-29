@@ -1,14 +1,17 @@
-import React, { useMemo, useState, useEffect } from 'react';
-import { AppData } from '../types';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
+import { AppData, UserSettings } from '../types';
 import { getTodayString, formatDate } from '../utils/storage';
-import { motion } from 'motion/react';
+import { saveSettings } from '../utils/firestore';
+import { motion, AnimatePresence } from 'motion/react';
 import { GoogleGenAI } from '@google/genai';
+import { Check } from 'lucide-react';
 
 interface AnalyticsProps {
   data: AppData;
+  userId: string;
 }
 
-export default function Analytics({ data }: AnalyticsProps) {
+export default function Analytics({ data, userId }: AnalyticsProps) {
   const stats = useMemo(() => {
     let totalUploads = 0;
     let currentStreak = 0;
@@ -99,6 +102,91 @@ export default function Analytics({ data }: AnalyticsProps) {
   }, [data]);
 
   const [aiInsight, setAiInsight] = useState("Analyzing your progress...");
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editEarnings, setEditEarnings] = useState('');
+  const [editGoal, setEditGoal] = useState('');
+  const [isPressing, setIsPressing] = useState(false);
+  const pressTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const settings = data.settings || { earnings: 0, earningGoal: 1000000 };
+
+  const daysLeftInYear = useMemo(() => {
+    const now = new Date();
+    const endOfYear = new Date(now.getFullYear(), 11, 31);
+    const diffTime = Math.abs(endOfYear.getTime() - now.getTime());
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  }, []);
+
+  const earningProgress = Math.min((settings.earnings / (settings.earningGoal || 1)) * 100, 100);
+
+  const handlePressStart = () => {
+    setIsPressing(true);
+    pressTimerRef.current = setTimeout(() => {
+      setEditEarnings(settings.earnings.toString());
+      setEditGoal(settings.earningGoal.toString());
+      setIsEditModalOpen(true);
+      setIsPressing(false);
+    }, 5000);
+  };
+
+  const handlePressEnd = () => {
+    setIsPressing(false);
+    if (pressTimerRef.current) {
+      clearTimeout(pressTimerRef.current);
+    }
+  };
+
+  const handleSaveSettings = async () => {
+    const newSettings: UserSettings = {
+      earnings: Number(editEarnings) || 0,
+      earningGoal: Number(editGoal) || 1000000,
+    };
+    await saveSettings(userId, newSettings);
+    setIsEditModalOpen(false);
+  };
+
+  const months = useMemo(() => {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    return Array.from({ length: 12 }).map((_, i) => {
+      const date = new Date(now.getFullYear(), i, 1);
+      return {
+        name: date.toLocaleDateString('en-US', { month: 'short' }),
+        isPast: i < currentMonth,
+        isCurrent: i === currentMonth,
+        isFuture: i > currentMonth,
+      };
+    });
+  }, []);
+
+// Add this helper component
+function AnimatedNumber({ value }: { value: number }) {
+  const [displayValue, setDisplayValue] = useState(0);
+  
+  useEffect(() => {
+    const controls = {
+      current: 0
+    };
+    
+    // Simple animation
+    const duration = 1000;
+    const start = Date.now();
+    
+    const animate = () => {
+      const now = Date.now();
+      const progress = Math.min((now - start) / duration, 1);
+      setDisplayValue(Math.floor(progress * value));
+      
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      }
+    };
+    
+    requestAnimationFrame(animate);
+  }, [value]);
+  
+  return <>{displayValue.toLocaleString()}</>;
+}
 
   useEffect(() => {
     let isMounted = true;
@@ -106,14 +194,13 @@ export default function Analytics({ data }: AnalyticsProps) {
     async function fetchInsight() {
       try {
         const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-        const last7DaysStr = stats.last7Days.map(d => `${d.dayName}: ${d.hasUpload ? 'Uploaded' : 'Missed'}`).join(', ');
-        const prompt = `Analyze this user's habit tracking data and provide ONE short, encouraging, and insightful sentence (max 15 words).
+        const prompt = `Analyze this user's life and goal tracking data and provide ONE short, encouraging, and insightful sentence (max 15 words).
         Data:
         - Current streak: ${stats.currentStreak} days
-        - Total uploads: ${stats.totalUploads}
-        - Last 7 days: ${last7DaysStr}
+        - Earnings: ₹${settings.earnings} / ₹${settings.earningGoal}
+        - Days left in year: ${daysLeftInYear}
         
-        Make it sound like a premium, intelligent assistant. Do not use quotes.`;
+        Make it sound like a premium, intelligent assistant. Focus on time, money, or consistency. Do not use quotes.`;
         
         const response = await ai.models.generateContent({
           model: 'gemini-3.1-flash-lite-preview',
@@ -136,55 +223,134 @@ export default function Analytics({ data }: AnalyticsProps) {
     return () => {
       isMounted = false;
     };
-  }, [stats.currentStreak, stats.totalUploads, stats.last7Days, stats.fallbackInsight]);
+  }, [stats.currentStreak, settings.earnings, settings.earningGoal, daysLeftInYear, stats.fallbackInsight]);
 
   return (
     <div className="p-6 pb-28 animate-in fade-in duration-300">
       <h1 className="text-3xl heading-primary text-gradient mb-8">Analytics</h1>
       
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        <motion.div 
-          whileTap={{ scale: 1.02 }}
-          className="glass-panel glass-panel-interactive p-5 rounded-3xl flex flex-col justify-center relative overflow-hidden cursor-pointer"
-        >
-          <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl -mr-10 -mt-10"></div>
-          <p className="text-xs font-medium text-secondary mb-2 uppercase tracking-wider">Total Uploads</p>
-          <p className="text-4xl heading-primary">{stats.totalUploads}</p>
-        </motion.div>
+      {/* Hero Card */}
+      <motion.div 
+        onPointerDown={handlePressStart}
+        onPointerUp={handlePressEnd}
+        onPointerLeave={handlePressEnd}
+        onPointerCancel={handlePressEnd}
+        whileTap={{ scale: 0.97 }}
+        className="glass-panel p-5 rounded-3xl mb-6 relative overflow-hidden cursor-pointer"
+        style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
+      >
+        {/* Radial Glow */}
+        <div className="absolute -top-20 -left-20 w-64 h-64 bg-blue-500/10 blur-[100px] rounded-full pointer-events-none"></div>
         
+        {/* Shimmer Effect */}
         <motion.div 
-          whileTap={{ scale: 1.02 }}
-          className="glass-panel glass-panel-interactive p-5 rounded-3xl flex flex-col justify-center relative overflow-hidden cursor-pointer"
-        >
-          <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl -mr-10 -mt-10"></div>
-          <p className="text-xs font-medium text-secondary mb-2 uppercase tracking-wider">Current Streak</p>
-          <p className="text-4xl heading-primary flex items-baseline">
-            {stats.currentStreak} <span className="text-sm ml-1.5 text-small font-normal normal-case tracking-normal">days</span>
-          </p>
-        </motion.div>
-      </div>
+          className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -skew-x-12"
+          animate={{ x: ['-100%', '100%'] }}
+          transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+        />
+        
+        {/* Hold Progress Indicator */}
+        <AnimatePresence>
+          {isPressing && (
+            <motion.div
+              initial={{ width: 0, opacity: 0 }}
+              animate={{ width: '100%', opacity: 1 }}
+              exit={{ width: 0, opacity: 0 }}
+              transition={{ duration: 5, ease: "linear" }}
+              className="absolute top-0 left-0 h-1 bg-blue-500/50"
+            />
+          )}
+        </AnimatePresence>
+
+        <div className="grid grid-cols-2 gap-4 relative z-10">
+          {/* Left: Time Remaining */}
+          <div className="flex flex-col justify-center border-r border-white/10 pr-4">
+            <h3 className="text-xs font-medium text-secondary mb-2 uppercase tracking-wider">Days Left</h3>
+            <div className="flex items-baseline gap-1">
+              <span className="text-4xl heading-primary text-gradient"><AnimatedNumber value={daysLeftInYear} /></span>
+              <span className="text-sm text-secondary">days</span>
+            </div>
+            <div className="mt-2 w-full h-1 bg-white/5 rounded-full overflow-hidden">
+              <motion.div 
+                className="h-full bg-blue-500/50 rounded-full"
+                animate={{ opacity: [0.5, 1, 0.5] }}
+                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                style={{ width: '100%' }}
+              />
+            </div>
+          </div>
+
+          {/* Right: Earning Goal */}
+          <div className="flex flex-col justify-center pl-2">
+            <h3 className="text-xs font-medium text-secondary mb-2 uppercase tracking-wider">Earning Goal</h3>
+            <div className="flex flex-col mb-2">
+              <span className="text-2xl heading-primary text-gradient">₹<AnimatedNumber value={settings.earnings} /></span>
+              <span className="text-xs text-secondary">/ ₹{settings.earningGoal.toLocaleString()}</span>
+            </div>
+            <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden shadow-inner relative">
+              <motion.div 
+                initial={{ width: 0 }}
+                animate={{ width: `${earningProgress}%` }}
+                transition={{ duration: 1, ease: "easeOut" }}
+                className={`h-full rounded-full shadow-[0_0_10px_rgba(59,130,246,0.5)] bg-gradient-to-r from-[#3b82f6] to-[#06b6d4] ${earningProgress > 0 ? 'shadow-[0_0_15px_rgba(59,130,246,0.3)]' : ''}`}
+              >
+                {/* Shine effect */}
+                <motion.div 
+                  className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent"
+                  animate={{ x: ['-100%', '100%'] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                />
+              </motion.div>
+            </div>
+          </div>
+        </div>
+      </motion.div>
 
       <div className="space-y-4">
-        {/* Weekly Visual */}
+        {/* Month Progress System */}
         <motion.div 
-          whileTap={{ scale: 1.02 }}
-          className="glass-panel p-5 rounded-3xl relative overflow-hidden cursor-pointer"
+          className="glass-panel p-5 rounded-3xl relative overflow-hidden"
         >
-          <h3 className="text-xs font-medium text-secondary mb-4 uppercase tracking-wider">Last 7 Days</h3>
-          <div className="flex justify-between items-end h-16 gap-2">
-            {stats.last7Days.map((day, i) => (
-              <div key={day.dateStr} className="flex flex-col items-center flex-1 gap-2">
-                <div className="w-full bg-white/5 rounded-full h-10 relative overflow-hidden flex items-end">
-                  <motion.div 
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: day.hasUpload ? '100%' : '20%', opacity: day.hasUpload ? 1 : 0.3 }}
-                    transition={{ duration: 0.5, delay: i * 0.05, ease: "easeOut" }}
-                    className={`w-full rounded-full ${day.hasUpload ? 'bg-gradient-to-t from-[#3b82f6] to-[#06b6d4] shadow-[0_0_10px_rgba(59,130,246,0.3)]' : 'bg-white/20'}`}
-                  />
-                </div>
-                <span className="text-[10px] text-secondary font-medium uppercase tracking-wider">{day.dayName.charAt(0)}</span>
-              </div>
-            ))}
+          <h3 className="text-xs font-medium text-secondary mb-4 uppercase tracking-wider">Yearly Progress</h3>
+          <div className="overflow-x-auto no-scrollbar pb-2 -mx-2 px-2">
+            <div className="flex gap-4 min-w-max">
+              {months.map((month, i) => (
+                <motion.div 
+                  key={month.name} 
+                  className="flex flex-col items-center gap-2"
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: i * 0.05 }}
+                >
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center relative ${
+                    month.isPast ? 'bg-gradient-to-br from-[#3b82f6] to-[#06b6d4] shadow-[0_0_10px_rgba(59,130,246,0.3)]' :
+                    month.isCurrent ? 'bg-white/10 border border-[#3b82f6]/50' :
+                    'bg-white/5'
+                  }`}>
+                    {month.isPast && (
+                      <motion.div
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                      >
+                        <Check size={16} className="text-white" strokeWidth={3} />
+                      </motion.div>
+                    )}
+                    {month.isCurrent && (
+                      <motion.div 
+                        className="absolute inset-0 rounded-full border-2 border-[#3b82f6]"
+                        animate={{ scale: [1, 1.2, 1], opacity: [0.5, 0, 0.5] }}
+                        transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                      />
+                    )}
+                    {month.isFuture && <div className="w-2 h-2 rounded-full bg-white/20" />}
+                  </div>
+                  <span className={`text-[10px] font-medium uppercase tracking-wider ${
+                    month.isCurrent ? 'text-[#3b82f6]' : 'text-secondary'
+                  }`}>{month.name}</span>
+                </motion.div>
+              ))}
+            </div>
           </div>
         </motion.div>
 
@@ -192,18 +358,27 @@ export default function Analytics({ data }: AnalyticsProps) {
         <motion.div 
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.15, ease: "easeOut" }}
-          whileTap={{ scale: 1.02 }}
+          transition={{ duration: 0.6, delay: 0.15, ease: "easeOut" }}
+          whileTap={{ scale: 0.97 }}
           className="glass-panel p-5 rounded-3xl relative overflow-hidden border border-[#3b82f6]/10 shadow-[0_0_15px_rgba(59,130,246,0.05)] cursor-pointer flex items-start gap-4"
         >
-          <div className="w-8 h-8 rounded-full bg-[#3b82f6]/20 flex items-center justify-center shrink-0">
+          <motion.div 
+            className="w-8 h-8 rounded-full bg-[#3b82f6]/20 flex items-center justify-center shrink-0"
+            animate={{ boxShadow: ['0 0 0px rgba(59,130,246,0.2)', '0 0 10px rgba(59,130,246,0.4)', '0 0 0px rgba(59,130,246,0.2)'] }}
+            transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+          >
             <span className="text-[#3b82f6] text-sm">✨</span>
-          </div>
+          </motion.div>
           <div>
             <h3 className="text-xs font-medium text-[#3b82f6]/80 mb-1 uppercase tracking-wider">Insight</h3>
-            <p className="text-[13px] sm:text-[14px] text-[#e2e8f0] leading-relaxed font-normal">
+            <motion.p 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 1, delay: 0.5 }}
+              className="text-[13px] sm:text-[14px] text-[#e2e8f0] leading-relaxed font-normal"
+            >
               {aiInsight}
-            </p>
+            </motion.p>
           </div>
         </motion.div>
 
@@ -229,6 +404,68 @@ export default function Analytics({ data }: AnalyticsProps) {
           </div>
         </motion.div>
       </div>
+
+      {/* Edit Modal */}
+      <AnimatePresence>
+        {isEditModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            onClick={() => setIsEditModalOpen(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="glass-panel p-6 rounded-3xl w-full max-w-sm"
+            >
+              <h2 className="text-xl heading-primary mb-4">Edit Goals</h2>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-medium text-secondary mb-1 uppercase tracking-wider">Current Earnings (₹)</label>
+                  <input
+                    type="number"
+                    value={editEarnings}
+                    onChange={(e) => setEditEarnings(e.target.value)}
+                    className="w-full glass-input px-4 py-3 rounded-xl text-sm"
+                    placeholder="e.g. 50000"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-xs font-medium text-secondary mb-1 uppercase tracking-wider">Target Goal (₹)</label>
+                  <input
+                    type="number"
+                    value={editGoal}
+                    onChange={(e) => setEditGoal(e.target.value)}
+                    className="w-full glass-input px-4 py-3 rounded-xl text-sm"
+                    placeholder="e.g. 1000000"
+                  />
+                </div>
+                
+                <div className="flex gap-3 mt-6">
+                  <button
+                    onClick={() => setIsEditModalOpen(false)}
+                    className="flex-1 py-3 rounded-xl text-sm font-medium text-secondary hover:text-white transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveSettings}
+                    className="flex-1 py-3 rounded-xl text-sm font-medium bg-[#3b82f6] text-white shadow-[0_0_15px_rgba(59,130,246,0.4)] hover:bg-[#2563eb] transition-colors"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

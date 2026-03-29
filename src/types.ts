@@ -24,10 +24,16 @@ export interface Board {
   createdAt: number; // timestamp
 }
 
+export interface UserSettings {
+  earnings: number;
+  earningGoal: number;
+}
+
 export interface AppData {
   channels: Channel[];
   boards: Board[];
   notes: Note[];
+  settings?: UserSettings;
 }
 
 export type TabType = 'home' | 'calendar' | 'add' | 'analytics' | 'backup';

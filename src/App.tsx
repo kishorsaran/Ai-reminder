@@ -4,6 +4,7 @@ import {
   subscribeToChannels, 
   subscribeToBoards, 
   subscribeToNotes, 
+  subscribeToSettings,
   defaultData,
   saveChannel
 } from './utils/firestore';
@@ -28,9 +29,10 @@ function MainApp({ userId }: { userId: string }) {
     let channelsLoaded = false;
     let boardsLoaded = false;
     let notesLoaded = false;
+    let settingsLoaded = false;
 
     const checkLoaded = () => {
-      if (channelsLoaded && boardsLoaded && notesLoaded) {
+      if (channelsLoaded && boardsLoaded && notesLoaded && settingsLoaded) {
         setIsLoaded(true);
       }
     };
@@ -68,10 +70,17 @@ function MainApp({ userId }: { userId: string }) {
       checkLoaded();
     });
 
+    const unsubSettings = subscribeToSettings(userId, (settings) => {
+      setData(prev => ({ ...prev, settings }));
+      settingsLoaded = true;
+      checkLoaded();
+    });
+
     return () => {
       unsubChannels();
       unsubBoards();
       unsubNotes();
+      unsubSettings();
     };
   }, [userId]);
 
@@ -109,7 +118,7 @@ function MainApp({ userId }: { userId: string }) {
         {activeTab === 'home' && <Home data={data} userId={userId} updateData={setData} />}
         {activeTab === 'calendar' && <CalendarTab data={data} />}
         {activeTab === 'add' && <AddChannel data={data} userId={userId} />}
-        {activeTab === 'analytics' && <Analytics data={data} />}
+        {activeTab === 'analytics' && <Analytics data={data} userId={userId} />}
         {activeTab === 'backup' && <Backup data={data} userId={userId} onFocusModeChange={setIsFocusMode} />}
       </main>
       

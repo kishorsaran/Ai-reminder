@@ -97,6 +97,10 @@ service cloud.firestore {
         allow update: if isOwner(userId) && isValidNote(request.resource.data);
         allow delete: if isOwner(userId);
       }
+
+      match /settings/{settingId} {
+        allow read, write: if isOwner(userId);
+      }
     }
   }
 }

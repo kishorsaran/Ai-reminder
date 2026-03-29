@@ -1,6 +1,6 @@
 import { doc, setDoc, onSnapshot, collection, deleteDoc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { AppData, Channel, Board, Note } from '../types';
+import { AppData, Channel, Board, Note, UserSettings } from '../types';
 
 export enum OperationType {
   CREATE = 'create',
@@ -92,7 +92,31 @@ export const subscribeToNotes = (userId: string, onData: (notes: Note[]) => void
   );
 };
 
+export const subscribeToSettings = (userId: string, onData: (settings: UserSettings | undefined) => void) => {
+  const path = `users/${userId}/settings/analytics`;
+  return onSnapshot(
+    doc(db, path),
+    (docSnap) => {
+      if (docSnap.exists()) {
+        onData(docSnap.data() as UserSettings);
+      } else {
+        onData(undefined);
+      }
+    },
+    (error) => handleFirestoreError(error, OperationType.GET, path)
+  );
+};
+
 // Mutations
+export const saveSettings = async (userId: string, settings: UserSettings) => {
+  const path = `users/${userId}/settings/analytics`;
+  try {
+    await setDoc(doc(db, path), settings, { merge: true });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+};
+
 export const saveChannel = async (userId: string, channel: Channel) => {
   const path = `users/${userId}/channels/${channel.id}`;
   try {
