@@ -20,6 +20,21 @@
             }
           }
         },
+        "prompts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "channelId": { "type": "string" },
+              "title": { "type": "string" },
+              "category": { "type": "string" },
+              "content": { "type": "string" },
+              "createdAt": { "type": "number" },
+              "lastUsed": { "type": "number" }
+            }
+          }
+        },
         "records": {
           "type": "object",
           "description": "Map of date strings to DailyRecord objects"

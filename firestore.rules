@@ -74,6 +74,17 @@ service cloud.firestore {
              data.updatedAt is number;
     }
 
+    function isValidPrompt(data) {
+      return hasRequiredFields(['id', 'channelId', 'title', 'category', 'content', 'createdAt', 'lastUsed']) &&
+             data.id is string && data.id.size() > 0 && data.id.size() < 100 &&
+             data.channelId is string && data.channelId.size() > 0 && data.channelId.size() < 100 &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.category is string && data.category.size() < 100 &&
+             data.content is string && data.content.size() < 50000 &&
+             data.createdAt is number &&
+             data.lastUsed is number;
+    }
+
     match /users/{userId} {
       allow read, write: if isOwner(userId);
       
@@ -95,6 +106,13 @@ service cloud.firestore {
         allow read: if isOwner(userId);
         allow create: if isOwner(userId) && isValidNote(request.resource.data);
         allow update: if isOwner(userId) && isValidNote(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      match /prompts/{promptId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidPrompt(request.resource.data);
+        allow update: if isOwner(userId) && isValidPrompt(request.resource.data);
         allow delete: if isOwner(userId);
       }
 

@@ -1,6 +1,6 @@
 import { doc, setDoc, onSnapshot, collection, deleteDoc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { AppData, Channel, Board, Note, UserSettings } from '../types';
+import { AppData, Channel, Board, Note, Prompt, UserSettings } from '../types';
 
 export enum OperationType {
   CREATE = 'create',
@@ -52,6 +52,7 @@ export const defaultData: AppData = {
   channels: [],
   boards: [],
   notes: [],
+  prompts: [],
 };
 
 // Subscriptions
@@ -87,6 +88,18 @@ export const subscribeToNotes = (userId: string, onData: (notes: Note[]) => void
     (snapshot) => {
       const notes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Note));
       onData(notes);
+    },
+    (error) => handleFirestoreError(error, OperationType.LIST, path)
+  );
+};
+
+export const subscribeToPrompts = (userId: string, onData: (prompts: Prompt[]) => void) => {
+  const path = `users/${userId}/prompts`;
+  return onSnapshot(
+    collection(db, path),
+    (snapshot) => {
+      const prompts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Prompt));
+      onData(prompts);
     },
     (error) => handleFirestoreError(error, OperationType.LIST, path)
   );
@@ -166,6 +179,24 @@ export const deleteNote = async (userId: string, noteId: string) => {
   const path = `users/${userId}/notes/${noteId}`;
   try {
     await deleteDoc(doc(db, 'users', userId, 'notes', noteId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+};
+
+export const savePrompt = async (userId: string, prompt: Prompt) => {
+  const path = `users/${userId}/prompts/${prompt.id}`;
+  try {
+    await setDoc(doc(db, 'users', userId, 'prompts', prompt.id), prompt);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+};
+
+export const deletePrompt = async (userId: string, promptId: string) => {
+  const path = `users/${userId}/prompts/${promptId}`;
+  try {
+    await deleteDoc(doc(db, 'users', userId, 'prompts', promptId));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
   }

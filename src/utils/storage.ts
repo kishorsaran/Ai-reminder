@@ -6,6 +6,7 @@ const defaultData: AppData = {
   channels: [],
   boards: [],
   notes: [],
+  prompts: [],
 };
 
 export const loadData = (): AppData => {

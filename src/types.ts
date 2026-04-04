@@ -18,6 +18,16 @@ export interface Note {
   updatedAt: number; // timestamp
 }
 
+export interface Prompt {
+  id: string;
+  channelId: string;
+  title: string;
+  category: string;
+  content: string;
+  createdAt: number;
+  lastUsed: number;
+}
+
 export interface Board {
   id: string;
   name: string;
@@ -33,7 +43,8 @@ export interface AppData {
   channels: Channel[];
   boards: Board[];
   notes: Note[];
+  prompts: Prompt[];
   settings?: UserSettings;
 }
 
-export type TabType = 'home' | 'calendar' | 'add' | 'analytics' | 'backup';
+export type TabType = 'home' | 'prompt-vault' | 'add' | 'analytics' | 'backup';

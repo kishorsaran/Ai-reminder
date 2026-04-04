@@ -4,13 +4,14 @@ import {
   subscribeToChannels, 
   subscribeToBoards, 
   subscribeToNotes, 
+  subscribeToPrompts,
   subscribeToSettings,
   defaultData,
   saveChannel
 } from './utils/firestore';
 import { getTodayString, formatDate } from './utils/storage';
 import Home from './components/Home';
-import CalendarTab from './components/Calendar';
+import PromptVault from './components/PromptVault';
 import AddChannel from './components/AddChannel';
 import Analytics from './components/Analytics';
 import Backup from './components/Backup';
@@ -29,10 +30,11 @@ function MainApp({ userId }: { userId: string }) {
     let channelsLoaded = false;
     let boardsLoaded = false;
     let notesLoaded = false;
+    let promptsLoaded = false;
     let settingsLoaded = false;
 
     const checkLoaded = () => {
-      if (channelsLoaded && boardsLoaded && notesLoaded && settingsLoaded) {
+      if (channelsLoaded && boardsLoaded && notesLoaded && promptsLoaded && settingsLoaded) {
         setIsLoaded(true);
       }
     };
@@ -70,6 +72,12 @@ function MainApp({ userId }: { userId: string }) {
       checkLoaded();
     });
 
+    const unsubPrompts = subscribeToPrompts(userId, (prompts) => {
+      setData(prev => ({ ...prev, prompts }));
+      promptsLoaded = true;
+      checkLoaded();
+    });
+
     const unsubSettings = subscribeToSettings(userId, (settings) => {
       setData(prev => ({ ...prev, settings }));
       settingsLoaded = true;
@@ -80,6 +88,7 @@ function MainApp({ userId }: { userId: string }) {
       unsubChannels();
       unsubBoards();
       unsubNotes();
+      unsubPrompts();
       unsubSettings();
     };
   }, [userId]);
@@ -116,7 +125,7 @@ function MainApp({ userId }: { userId: string }) {
     <div className="min-h-screen max-w-md mx-auto relative bg-transparent animate-in fade-in duration-500">
       <main className="min-h-screen">
         {activeTab === 'home' && <Home data={data} userId={userId} updateData={setData} />}
-        {activeTab === 'calendar' && <CalendarTab data={data} />}
+        {activeTab === 'prompt-vault' && <PromptVault data={data} userId={userId} />}
         {activeTab === 'add' && <AddChannel data={data} userId={userId} />}
         {activeTab === 'analytics' && <Analytics data={data} userId={userId} />}
         {activeTab === 'backup' && <Backup data={data} userId={userId} onFocusModeChange={setIsFocusMode} />}

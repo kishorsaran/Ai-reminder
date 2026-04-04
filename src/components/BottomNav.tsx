@@ -1,6 +1,6 @@
 import React from 'react';
 import { TabType } from '../types';
-import { Home, Calendar, PlusCircle, BarChart2, Database } from 'lucide-react';
+import { Home, FolderOpen, PlusCircle, BarChart2, Database } from 'lucide-react';
 
 interface BottomNavProps {
   activeTab: TabType;
@@ -11,7 +11,7 @@ interface BottomNavProps {
 export default function BottomNav({ activeTab, setActiveTab, isFocusMode = false }: BottomNavProps) {
   const tabs = [
     { id: 'home', icon: Home, label: 'Home' },
-    { id: 'calendar', icon: Calendar, label: 'Calendar' },
+    { id: 'prompt-vault', icon: FolderOpen, label: 'Vault' },
     { id: 'add', icon: PlusCircle, label: 'Add' },
     { id: 'analytics', icon: BarChart2, label: 'Stats' },
     { id: 'backup', icon: Database, label: 'Backup' },
