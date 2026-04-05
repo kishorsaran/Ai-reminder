@@ -48,7 +48,8 @@ const LongPressPrompt = ({
     if (timerRef.current) clearTimeout(timerRef.current);
   };
 
-  const handleClick = () => {
+  const handleClick = (e: React.MouseEvent) => {
+    e.preventDefault();
     if (!isLongPressRef.current) {
       handleExpand(prompt.id);
     }
@@ -165,6 +166,7 @@ export default function PromptVault({ data, userId }: PromptVaultProps) {
   };
 
   const handleCopy = async (prompt: Prompt, e: React.MouseEvent | React.PointerEvent) => {
+    e.preventDefault();
     e.stopPropagation();
     try {
       await navigator.clipboard.writeText(prompt.content);
@@ -240,12 +242,6 @@ export default function PromptVault({ data, userId }: PromptVaultProps) {
       setExpandedPromptId(null);
     } else {
       setExpandedPromptId(promptId);
-      setTimeout(() => {
-        const element = document.getElementById(`prompt-${promptId}`);
-        if (element) {
-          element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }
-      }, 150); // slight delay to allow expansion animation to start
     }
   };
 
@@ -262,10 +258,10 @@ export default function PromptVault({ data, userId }: PromptVaultProps) {
 
   const getCategoryColor = (category: string) => {
     const cat = category.toLowerCase();
-    if (cat.includes('script')) return 'bg-blue-500/20 text-blue-400 border border-blue-500/30';
-    if (cat.includes('visual')) return 'bg-purple-500/20 text-purple-400 border border-purple-500/30';
-    if (cat.includes('seo') || cat.includes('tag')) return 'bg-green-500/20 text-green-400 border border-green-500/30';
-    return 'bg-zinc-500/20 text-zinc-400 border border-zinc-500/30';
+    if (cat === 'image') return 'bg-blue-600 text-white';
+    if (cat === 'video') return 'bg-yellow-400 text-black';
+    if (cat === 'audio') return 'bg-red-600 text-white';
+    return 'bg-cyan-600 text-white';
   };
 
   return (
@@ -277,7 +273,7 @@ export default function PromptVault({ data, userId }: PromptVaultProps) {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
-            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 bg-zinc-800 text-white px-4 py-2 rounded-full shadow-lg border border-zinc-700 flex items-center gap-2 text-sm"
+            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[100] bg-zinc-800 text-white px-4 py-2 rounded-full shadow-lg border border-zinc-700 flex items-center gap-2 text-sm pointer-events-none"
           >
             <CheckCircle2 size={16} className="text-green-400" />
             {toastMessage}

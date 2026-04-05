@@ -37,3 +37,11 @@ export const formatDate = (date: Date): string => {
 export const getTodayString = (): string => {
   return formatDate(new Date());
 };
+
+export const getWeekStart = (date: Date): string => {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day; // Sunday is 0
+  d.setDate(diff);
+  return formatDate(d);
+};

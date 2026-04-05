@@ -9,7 +9,7 @@ import {
   defaultData,
   saveChannel
 } from './utils/firestore';
-import { getTodayString, formatDate } from './utils/storage';
+import { getTodayString, formatDate, getWeekStart } from './utils/storage';
 import Home from './components/Home';
 import PromptVault from './components/PromptVault';
 import AddChannel from './components/AddChannel';
@@ -39,19 +39,42 @@ function MainApp({ userId }: { userId: string }) {
       }
     };
 
-    const unsubChannels = subscribeToChannels(userId, (channels) => {
+      const unsubChannels = subscribeToChannels(userId, (channels) => {
       // Daily Reset Logic
       const now = new Date();
       const todayStr = getTodayString();
+      const currentWeekStart = getWeekStart(now);
       
       const updatedChannels = channels.map(channel => {
-        const lastUpdatedDate = formatDate(new Date(channel.lastUpdated));
-        if (channel.uploaded && lastUpdatedDate !== todayStr) {
-          const resetChannel = { ...channel, uploaded: false, lastUpdated: now.getTime() };
-          // Update Firestore asynchronously
-          saveChannel(userId, resetChannel);
-          return resetChannel;
+        const lastUpdatedDate = new Date(channel.lastUpdated);
+        const lastUpdatedStr = formatDate(lastUpdatedDate);
+        const lastUpdatedWeekStart = getWeekStart(lastUpdatedDate);
+        
+        let needsUpdate = false;
+        let updatedChannel = { ...channel };
+
+        // Handle week change
+        if (lastUpdatedWeekStart !== currentWeekStart) {
+          updatedChannel.lastWeekCount = updatedChannel.currentWeekCount || 0;
+          updatedChannel.currentWeekCount = 0;
+          needsUpdate = true;
         }
+
+        // Handle daily reset
+        if (channel.uploaded && lastUpdatedStr !== todayStr) {
+          updatedChannel.uploaded = false;
+          updatedChannel.totalUploads = (updatedChannel.totalUploads || 0) + 1;
+          updatedChannel.currentWeekCount = (updatedChannel.currentWeekCount || 0) + 1;
+          needsUpdate = true;
+        }
+
+        if (needsUpdate) {
+          updatedChannel.lastUpdated = now.getTime();
+          // Update Firestore asynchronously
+          saveChannel(userId, updatedChannel);
+          return updatedChannel;
+        }
+        
         return channel;
       });
 
@@ -99,11 +122,32 @@ function MainApp({ userId }: { userId: string }) {
       if (document.visibilityState === 'visible' && isLoaded) {
         const now = new Date();
         const todayStr = getTodayString();
+        const currentWeekStart = getWeekStart(now);
         
         data.channels.forEach(channel => {
-          const lastUpdatedDate = formatDate(new Date(channel.lastUpdated));
-          if (channel.uploaded && lastUpdatedDate !== todayStr) {
-            saveChannel(userId, { ...channel, uploaded: false, lastUpdated: now.getTime() });
+          const lastUpdatedDate = new Date(channel.lastUpdated);
+          const lastUpdatedStr = formatDate(lastUpdatedDate);
+          const lastUpdatedWeekStart = getWeekStart(lastUpdatedDate);
+          
+          let needsUpdate = false;
+          let updatedChannel = { ...channel };
+
+          if (lastUpdatedWeekStart !== currentWeekStart) {
+            updatedChannel.lastWeekCount = updatedChannel.currentWeekCount || 0;
+            updatedChannel.currentWeekCount = 0;
+            needsUpdate = true;
+          }
+
+          if (channel.uploaded && lastUpdatedStr !== todayStr) {
+            updatedChannel.uploaded = false;
+            updatedChannel.totalUploads = (updatedChannel.totalUploads || 0) + 1;
+            updatedChannel.currentWeekCount = (updatedChannel.currentWeekCount || 0) + 1;
+            needsUpdate = true;
+          }
+
+          if (needsUpdate) {
+            updatedChannel.lastUpdated = now.getTime();
+            saveChannel(userId, updatedChannel);
           }
         });
       }

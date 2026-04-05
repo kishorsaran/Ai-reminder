@@ -26,6 +26,10 @@ export default function AddChannel({ data, userId }: AddChannelProps) {
       uploaded: false,
       lastUpdated: new Date().getTime(),
       order: data.channels.length,
+      createdAt: new Date().getTime(),
+      totalUploads: 0,
+      currentWeekCount: 0,
+      lastWeekCount: 0,
     };
 
     saveChannel(userId, newChannel);

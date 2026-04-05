@@ -6,6 +6,10 @@ export interface Channel {
   lastUpdated: number; // timestamp
   order: number;
   history?: string[]; // Array of YYYY-MM-DD strings
+  totalUploads?: number;
+  currentWeekCount?: number;
+  lastWeekCount?: number;
+  createdAt?: number;
 }
 
 export interface Note {
